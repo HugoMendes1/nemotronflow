@@ -4,6 +4,7 @@ Every record carries `session_id` (one per process boot) and, when relevant,
 `utterance_id`. Output is JSONL to a rotating file plus a human-readable
 mirror to stderr in dev. A module-level test sink captures the last record.
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,20 +22,20 @@ _LAST_RECORD: dict[str, Any] | None = None
 
 def reset_session(session_id: str | None = None) -> None:
     """(Test helper.) Start a fresh session id and clear the test sink."""
-    global _CURRENT_SESSION_ID, _LAST_RECORD
+    global _CURRENT_SESSION_ID, _LAST_RECORD  # noqa: PLW0603
     _CURRENT_SESSION_ID = session_id or uuid.uuid4().hex
     _LAST_RECORD = None
 
 
 def session_id() -> str:
-    global _CURRENT_SESSION_ID
+    global _CURRENT_SESSION_ID  # noqa: PLW0603
     if not _CURRENT_SESSION_ID:
         _CURRENT_SESSION_ID = uuid.uuid4().hex
     return _CURRENT_SESSION_ID
 
 
 def _test_sink(_logger: Any, _method_name: str, event_dict: dict[str, Any]) -> dict[str, Any]:
-    global _LAST_RECORD
+    global _LAST_RECORD  # noqa: PLW0603
     _LAST_RECORD = dict(event_dict)
     return event_dict
 
@@ -74,12 +75,12 @@ def configure(level: str = "INFO", log_dir: Path | None = None) -> None:
         root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
 
-def get_logger(name: str = "nemotronflow") -> structlog.stdlib.BoundLogger:
+def get_logger(name: str = "nemotronflow") -> Any:
     """Return a bound logger. Also exposes get_logger.last_record() for tests."""
     log = structlog.get_logger(name)
 
     def _last_record() -> dict[str, Any] | None:
         return _LAST_RECORD
 
-    setattr(get_logger, "last_record", _last_record)
-    return log  # type: ignore[return-value]
+    setattr(get_logger, "last_record", _last_record)  # noqa: B010
+    return log
