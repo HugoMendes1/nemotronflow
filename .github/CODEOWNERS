@@ -1,0 +1,8 @@
+# Default reviewers for all PRs
+* @nemotronflow/maintainers
+
+# Backend (Python sidecar)
+/backend/ @nemotronflow/backend
+
+# Frontend (React + Tauri)
+/frontend/ @nemotronflow/frontend
