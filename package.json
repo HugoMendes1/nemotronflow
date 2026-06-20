@@ -1,0 +1,13 @@
+{
+  "name": "nemotronflow",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "lint": "pnpm -C frontend lint",
+    "test": "pnpm -C frontend test",
+    "dev": "pnpm -C frontend dev",
+    "build": "pnpm -C frontend build"
+  }
+}
