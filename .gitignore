@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/src-tauri/target/
+
+# Models (never commit)
+backend/nemotronflow/models/*
+!backend/nemotronflow/models/.gitkeep
+
+# App data (local runs)
+.nemotronflow/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Env
+.env
