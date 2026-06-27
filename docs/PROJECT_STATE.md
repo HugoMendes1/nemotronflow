@@ -10,9 +10,9 @@ An open-source desktop app providing a premium Wispr Flow push-to-talk speech-to
 
 **Architecture Validation Spike** — determining if the ASR model can be exported to ONNX and run through Rust's `ort` crate to eliminate the Python sidecar dependency.
 
-## Current Spike Phase
+## Spike Phase 2 COMPLETE
 
-**Phase 2c (complete)** — ONNX export complete, encoder proven correct (max diff 6e-6), decoder_joint argmax proven correct, full greedy decode pipeline produces ~90% word-match transcriptions. Token-level differences from NeMo reference are due to NeMo's label-looping heuristics not replicated in simple frame-looping greedy. Next: Phase 3 (Rust ort validation).
+**Phase 2 (in progress)** → **Phase 2 COMPLETE**. The full ONNX pipeline (audio → features → encoder.onnx → decoder_joint.onnx → greedy RNNT decode → SentencePiece) produces **byte-for-byte identical** transcriptions to the native NeMo implementation on both test samples. Root cause of the earlier mismatch was a decode-loop state-management bug (state must not update on blank). Fixed in `spike/scripts/22_fixed_decode.py`.
 
 ## Overall Progress
 
@@ -24,24 +24,24 @@ An open-source desktop app providing a premium Wispr Flow push-to-talk speech-to
 | Spike Phase 1: Model download | ✅ Complete | 2.4 GB .nemo file from HuggingFace |
 | Spike Phase 2a: Non-streaming ONNX export | ✅ Complete | encoder.onnx + decoder_joint.onnx, verified with onnxruntime |
 | Spike Phase 2b: Streaming ONNX export | ✅ Complete | With cache tensors, ~2.4 GB total |
-| Spike Phase 2c: End-to-end validation | ✅ Complete | Encoder proven correct, decoder_joint argmax matches, full pipeline works |
-| Spike Phase 3: Rust ort validation | ⏳ Pending | |
+| Spike Phase 2c: End-to-end validation | ✅ COMPLETE | Encoder (6e-6 diff), decoder_joint (argmax matches), full pipeline **EXACT match** on both samples |
+| Spike Phase 3: Rust ort validation | ⏳ Pending | Next |
 | Spike Phase 4: Benchmarking | ⏳ Pending | |
 | Spike Phase 5: Streaming feasibility | ⏳ Pending | |
 | Spike Phase 6: Final report | ⏳ Pending | |
 
-**Overall: ~55% of spike complete**
+**Overall: ~60% of spike complete**
 
 ## Current Blocker
 
-None. Phase 2 is complete. Phase 3 (Rust ort) is ready to begin.
+None. **Spike Phase 2 is COMPLETE.** Phase 3 (Rust ort validation) is ready to begin.
 
 ## Last Successful Validation
 
 - **Encoder ONNX vs PyTorch**: max absolute difference = 6e-6, allclose at 1e-4
-- **ONNX encoder + NeMo decoder**: produces EXACT reference transcript
-- **Decoder_joint ONNX vs PyTorch**: argmax matches for every tested (frame, token) pair
-- **Full ONNX pipeline**: produces recognizable transcriptions (~90% word match)
+- **ONNX encoder + NeMo decoder**: produces EXACT reference transcript (proves encoder ONNX is correct)
+- **Decoder_joint ONNX vs PyTorch**: identical argmax at every frame with identical inputs (proves decoder_joint ONNX is correct)
+- **Full ONNX pipeline (script 22_fixed_decode.py)**: **BYTE-FOR-BYTE EXACT MATCH** on both sample1.flac and sample2.flac against native NeMo transcription
 
 ## Current Architecture Status
 

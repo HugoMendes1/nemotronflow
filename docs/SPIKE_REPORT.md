@@ -82,18 +82,60 @@
 - **Argmax is identical for every tested (frame, token) pair**
 - **Conclusion**: ONNX decoder_joint is mathematically correct
 
-### Phase 2c-3: Full ONNX Pipeline
+### Phase 2c-3: Full ONNX Pipeline (First Attempt)
 
 **Script**: `spike/scripts/17_full_onnx_pipeline.py`
 
 - Implemented greedy RNNT decode loop: outer loop over encoder frames T, inner loop emits tokens until blank
 - SOS/priming: feed `blank_id` as first token with zero LSTM states
 - **Result**: Pipeline produces recognizable transcriptions (~90% word match with reference)
+- **Mismatch**: Missing words, merged tokens, capitalization loss
 
-**Root cause analysis** (script `spike/scripts/18_decode_compare.py`):
-- NeMo's production decoder uses `GreedyBatchedRNNTLabelLoopingComputer` with heuristics for token merging
-- Simple frame-looping greedy doesn't replicate these heuristics
-- The ONNX models themselves are proven correct; the decode algorithm needs refinement
+### Phase 2c-4: Root Cause Investigation and FIX
+
+**Scripts**: `spike/scripts/19_init_state.py`, `21_frame_frame.py`, `22_fixed_decode.py`
+
+**Investigation steps**:
+1. Script 19 — Tested whether `initialize_state()` returns encoder-derived state (it returns zeros — not the cause)
+2. Script 21 — Frame-by-frame argmax comparison with identical inputs (SOS, zero state): **ONNX and PyTorch agree at ALL frames** — proving the ONNX models are correct
+3. Studied NeMo's `GreedyBatchedRNNTLabelLoopingComputer.torch_impl` source code
+
+**Root cause found**: The decode loop was updating the LSTM state on **every** decoder_joint call, including when blank was predicted. But NeMo's label-looping algorithm does NOT update the prediction-network state when advancing through blank frames. It calls `predict()` once, reuses that prediction output across multiple encoder frames (only advancing the time index on blank), and only calls `predict()` again after a non-blank token is emitted.
+
+Since the ONNX decoder_joint re-runs `predict()` on every call, feeding it the **updated** state after a blank frame produces a different prediction than NeMo's reused prediction. The fix: **do not update the state when blank is predicted** — keep the previous state for the next frame. Because `predict(last_token, old_state)` is deterministic, re-running it on the next frame with the same inputs gives the same prediction, matching NeMo's reuse pattern.
+
+**Fix** (`spike/scripts/22_fixed_decode.py`):
+```python
+if pred == blank_id:
+    # Do NOT update state — keep previous state for next frame
+    not_blank = False
+else:
+    # Non-blank: update state and token
+    emitted.append(pred)
+    last_token = pred
+    state1 = new_state1
+    state2 = new_state2
+```
+
+**Result**: ✅ **BYTE-FOR-BYTE EXACT MATCH** on both sample1.flac and sample2.flac against native NeMo transcription.
+
+```
+sample1.flac:
+  ONNX:  Going along slushy country roads and speaking to damp audiences in draughtty
+         schoolrooms day after day for a fortnight he'll have to put in an appearance
+         at some place of worship on Sunday morning and he can come to us immediately afterwards.
+  Ref:   [identical]
+  EXACT MATCH: True
+
+sample2.flac:
+  ONNX:  Before he had time to answer, a much encumbered Vera burst into the room with the
+         question, I say, can I leave these here? These were a small black pig and a lusty
+         specimen of black red gamecock.
+  Ref:   [identical]
+  EXACT MATCH: True
+```
+
+**Spike Phase 2: COMPLETE.** The full ONNX pipeline (audio → features → encoder.onnx → decoder_joint.onnx → greedy RNNT decode → SentencePiece) produces identical output to native NeMo.
 
 ### Failed Hypotheses
 
@@ -101,6 +143,8 @@
 2. **`predict(state=zeros)` differs from `predict(state=None)`**: Identical — both produce same hidden states.
 3. **`add_sos=True` matches ONNX export**: ONNX export uses `add_sos=False` (set by `_prepare_for_export`).
 4. **PowerShell `2>&1 | Out-Null` captures Python output**: Does not reliably — scripts must write to their own log files.
+5. **`initialize_state()` returns encoder-derived state**: Returns zeros — not the cause of decode divergence.
+6. **NeMo uses label-looping heuristics that can't be replicated**: False — the only behavioral difference was the state-update-on-blank rule, which is a simple fix.
 
 ### Key Technical Discoveries
 
@@ -110,6 +154,7 @@
 4. Encoder layout in ONNX: `[B, D=1024, T]` (D in middle), joint internally transposes to `[B, T, D]`
 5. Blank index = 1024 (last token, = vocab_size)
 6. SentencePiece tokenizer with 1024 tokens, `model.tokenizer.tokenizer` is the inner sp model
+7. **RNNT greedy decode state rule**: Do NOT update LSTM state on blank prediction — reuse the previous prediction across blank frames (matching NeMo's `GreedyBatchedRNNTLabelLoopingComputer` behavior)
 
 ### Precedent Projects
 
